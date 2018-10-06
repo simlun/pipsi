@@ -1,8 +1,10 @@
 import os
 import sys
+import subprocess
 import pytest
 import click
-from pipsi import Repo, find_scripts
+from click.testing import CliRunner
+from pipsi import Repo, find_scripts, cli
 
 
 @pytest.fixture
@@ -58,6 +60,43 @@ def test_simple_install(repo, home, bin, package, glob):
     assert home.join(package).check()
     assert bin.listdir(glob)
     assert repo.upgrade(package)
+
+
+def test_upgrade_all(repo, home, bin):
+    def installed_version(package):
+        pip_freeze = ['%s/%s/bin/pip' % (home.strpath, package), 'freeze']
+        frozen_requirements = subprocess.check_output(pip_freeze, stderr=subprocess.STDOUT)
+        frozen_requirements = frozen_requirements.strip()
+        for requirement in frozen_requirements.split('\n'):
+            name, version = requirement.split('==', 2)
+            if name == bytes(package):
+                version_as_tuple = tuple([int(i) for i in version.split('.')])
+                return version_as_tuple
+
+    arbitrary_packages = [
+        ('grin', (1, 2)),
+        ('curlish', (1, 17)),
+    ]
+
+    # Install packages and assert given versions were installed:
+    for name, version_tuple in arbitrary_packages:
+        package = '%s==%s' % (name, '.'.join([str(i) for i in version_tuple]))
+        assert repo.install(package)
+        assert installed_version(name) == version_tuple
+
+    # Run upgrade command with no packages as arguments:
+    runner = CliRunner()
+    args = ['--home', str(home),
+            '--bin-dir', str(bin),
+            'upgrade',
+             # Note: no packages are given as arguments!
+            ]
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 0
+
+    # Assert versions have increased:
+    for name, version_tuple in arbitrary_packages:
+        assert installed_version(name) > version_tuple
 
 
 @pytest.mark.xfail(

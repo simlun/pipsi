@@ -423,6 +423,17 @@ class Repo(object):
 
         return True
 
+    def upgrade_all(self, packages, editable=False):
+        if not packages:
+            if os.path.isdir(self.home):
+                all_installed_packages = os.listdir(self.home)
+                packages = all_installed_packages
+
+        for package in packages:
+            self.upgrade(package, editable)
+
+        return True
+
     def list_everything(self, versions=False):
         venvs = {}
         python = '/Scripts/python.exe' if IS_WIN else '/bin/python'
@@ -491,14 +502,14 @@ def install(repo, package, python, editable, system_site_packages):
 
 
 @cli.command()
-@click.argument('package')
+@click.argument('packages', required=False, nargs=-1)
 @click.option('--editable', '-e', is_flag=True,
               help='Enable editable installation.  This only works for '
                    'locally installed packages.')
 @click.pass_obj
-def upgrade(repo, package, editable):
-    """Upgrades an already installed package."""
-    if repo.upgrade(package, editable):
+def upgrade(repo, packages, editable):
+    """Upgrades the specifiled (or all) already installed packages."""
+    if repo.upgrade_all(packages, editable):
         click.echo('Done.')
     else:
         sys.exit(1)
